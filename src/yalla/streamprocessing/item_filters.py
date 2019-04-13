@@ -269,7 +269,7 @@ class CuckooFilter(ShrinkableFilter):
 
     def __get_locations(self, serialized_item, fingerprint):
         location1 = self.__hasher.hash(serialized_item) % self.__number_of_buckets
-        location2 = location1 ^ self.__hasher.hash(fingerprint) % self.__number_of_buckets
+        location2 = (location1 ^ self.__hasher.hash(fingerprint)) % self.__number_of_buckets
         return [location1, location2]
 
     def __fingerprint(self, serialized_item):
@@ -288,15 +288,19 @@ class CuckooFilter(ShrinkableFilter):
         current_location = random.choice(locations)
         item_relocations = 0
         while item_relocations < self.__max_item_relocations:
-            id_to_swap = random.randrange(0, self.__current_items_per_bucket[current_location])
-            item_to_swap = self.__get_item(current_location, id_to_swap)
-            self.__set_item(current_location, id_to_swap, fingerprint)
-            current_location = current_location ^ self.__hasher.hash(item_to_swap)
+            fingerprint = self.__swap_with_random_item_from_bucket(current_location, fingerprint)
+            current_location = (current_location ^ self.__hasher.hash(fingerprint)) % self.__number_of_buckets
             if self.__is_bucket_available(current_location):
-                self.__append_item_to_bucket(current_location, item_to_swap)
+                self.__append_item_to_bucket(current_location, fingerprint)
                 return
             item_relocations += 1
         raise CuckooInsertionFailure("CuckooFilter is full. Increase max_item_relocations or target_total_size")
+
+    def __swap_with_random_item_from_bucket(self, bucket_id, fingerprint):
+        id_to_swap = random.randrange(0, self.__current_items_per_bucket[bucket_id])
+        item_to_swap = self.__get_item(bucket_id, id_to_swap)
+        self.__set_item(bucket_id, id_to_swap, fingerprint)
+        return item_to_swap
 
     def __is_bucket_available(self, bucket_id):
         return self.__current_items_per_bucket[bucket_id] < self.__max_items_per_bucket
