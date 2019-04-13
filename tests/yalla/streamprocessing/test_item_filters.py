@@ -38,11 +38,13 @@ class TestBloomFilter:
                                    target_false_positive_prob=target_false_positive_prob)
         naive_filter = NaiveFilter(bloom_filter.get_bit_array_size())
 
+        # when
         observed_false_positive_fraction, total_items_tested = \
             sample_real_false_positive_rate(bloom_filter, expected_item_count, target_false_positive_prob)
         naive_false_positive_fraction, total_items_tested = \
             sample_real_false_positive_rate(naive_filter, expected_item_count, target_false_positive_prob)
 
+        # then
         print("False positive rate was %s out of %s" % (observed_false_positive_fraction, total_items_tested))
         print("Reference false positive rate was %s out of %s" % (naive_false_positive_fraction, total_items_tested))
         assert observed_false_positive_fraction <= target_false_positive_prob * tolerance
