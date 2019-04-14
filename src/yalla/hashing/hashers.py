@@ -5,7 +5,7 @@ from xxhash import xxh64_intdigest, xxh32_intdigest
 
 class Hasher(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def hash(self, serialized_item: str) -> int:
+    def hash(self, serialized_item: bytes) -> int:
         pass
 
 

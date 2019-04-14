@@ -4,6 +4,7 @@ import logging
 import math
 import uuid
 import random
+import timeit
 
 from bitarray import bitarray
 
@@ -38,7 +39,7 @@ def serialize_naively(item: object):
     """
     Extremely naive serializer which simply dumps incoming objects to a string
     """
-    return repr(item)
+    return repr(item).encode('utf-8')
 
 
 class KeepAllFilter(ShrinkableFilter):
@@ -255,9 +256,12 @@ class CuckooFilter(ShrinkableFilter):
         return math.log2(items_per_bucket / target_false_positive_prob)
 
     def __contains__(self, item: object) -> bool:
-        serialized_item = self.__serializer.serialize(item)
+        serialized_item = self.__serializer(item)
         fingerprint = self.__fingerprint(serialized_item)
         locations = self.__get_locations(serialized_item, fingerprint)
+        return self.__is_fingerprint_present(fingerprint, locations)
+
+    def __is_fingerprint_present(self, fingerprint, locations):
         return any([self.__get_item_id_in_bucket(location, fingerprint) >= 0 for location in locations])
 
     def __get_item_id_in_bucket(self, bucket_id, fingerprint):
@@ -269,7 +273,8 @@ class CuckooFilter(ShrinkableFilter):
 
     def __get_locations(self, serialized_item, fingerprint):
         location1 = self.__hasher.hash(serialized_item) % self.__number_of_buckets
-        location2 = (location1 ^ self.__hasher.hash(fingerprint)) % self.__number_of_buckets
+        hashed_fingerprint = self.__hasher.hash(fingerprint.to_bytes(self.__fingerprint_size, byteorder='little'))
+        location2 = (location1 ^ hashed_fingerprint) % self.__number_of_buckets
         return [location1, location2]
 
     def __fingerprint(self, serialized_item):
@@ -278,18 +283,23 @@ class CuckooFilter(ShrinkableFilter):
         return fingerprint_bits
 
     def add(self, item: object):
-        serialized_item = self.__serializer.serialize(item)
+        serialized_item = self.__serializer(item)
         fingerprint = self.__fingerprint(serialized_item)
         locations = self.__get_locations(serialized_item, fingerprint)
+        if self.__is_fingerprint_present(fingerprint, locations):
+            return
+
         available_locations = [location for location in locations if self.__is_bucket_available(location)]
         if len(available_locations) > 0:
             self.__append_item_to_bucket(locations[0], fingerprint)
             return
+
         current_location = random.choice(locations)
         item_relocations = 0
         while item_relocations < self.__max_item_relocations:
             fingerprint = self.__swap_with_random_item_from_bucket(current_location, fingerprint)
-            current_location = (current_location ^ self.__hasher.hash(fingerprint)) % self.__number_of_buckets
+            hashed_fingerprint = self.__hasher.hash(fingerprint.to_bytes(self.__fingerprint_size, byteorder='little'))
+            current_location = (current_location ^ hashed_fingerprint) % self.__number_of_buckets
             if self.__is_bucket_available(current_location):
                 self.__append_item_to_bucket(current_location, fingerprint)
                 return
@@ -323,7 +333,7 @@ class CuckooFilter(ShrinkableFilter):
     def __set_item(self, bucket_id, item_id, fingerprint):
         item_start, item_end = self.__item_bit_coordinates(bucket_id, item_id)
         fingerprint_bits = format(fingerprint, '0%sb' % self.__fingerprint_size)
-        self.__bit_array[item_start, item_end] = bitarray(fingerprint_bits, endian='little')
+        self.__bit_array[item_start:item_end] = bitarray(fingerprint_bits, endian='little')
 
     def __item_bit_coordinates(self, bucket_id, item_id):
         item_start = bucket_id * self.__bucket_size + item_id * self.__fingerprint_size
@@ -337,7 +347,7 @@ class CuckooFilter(ShrinkableFilter):
         raise NotImplementedError("Oops, Cuckoo Filters are not easily composable. Consider using Bloom Filter instead")
 
     def delete(self, item: object):
-        serialized_item = self.__serializer.serialize(item)
+        serialized_item = self.__serializer(item)
         fingerprint = self.__fingerprint(serialized_item)
         locations = self.__get_locations(serialized_item, fingerprint)
         for location in locations:
@@ -353,9 +363,11 @@ def sample_real_false_positive_rate(item_filter: ItemFilter, expected_item_count
     items_in_filter = [uuid.uuid4() for _ in range(expected_item_count)]
     items_not_in_filter = [uuid.uuid4() for _ in range(total_items_to_test)]
 
+    start_time = timeit.default_timer()
     for item in items_in_filter:
         item_filter.add(item)
+    end_time = timeit.default_timer()
 
     false_positive_counts = sum([1 for test_item in items_not_in_filter if test_item in item_filter])
     observed_false_positive_fraction = false_positive_counts / total_items_to_test
-    return observed_false_positive_fraction, total_items_to_test
+    return observed_false_positive_fraction, total_items_to_test, end_time - start_time
