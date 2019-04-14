@@ -1,6 +1,5 @@
 from __future__ import annotations
 import abc
-import logging
 import math
 import uuid
 import random
@@ -105,15 +104,14 @@ class BloomFilter(ItemFilter):
 
     def __init__(self, expected_item_count, target_false_positive_prob, serializer=None, seeds=DEFAULT_SEEDS) -> None:
         super().__init__()
-        self.__logger = logging.getLogger(BloomFilter.__name__)
         self.__size = self.__calculate_bit_array_size(expected_item_count, target_false_positive_prob)
         self.__number_of_hashers = self.__calculate_number_of_hashing_functions(target_false_positive_prob)
         self.__bit_array = bitarray(self.__size)
         self.clear()
         self.__serializer = serializer if serializer else serialize_naively
         self.__hashers = [XxHasher64(seed) for seed in seeds]
-        self.__logger.info("Initialized bloom filter with %s-bit array, target false positive prob. %s "
-                           "and %s hashing functions", self.__size, target_false_positive_prob, self.__number_of_hashers)
+        print("Initialized Bloom Filter with %s-bit array, target false positive prob. %s and %s hashing functions" % (
+            self.__size, target_false_positive_prob, self.__number_of_hashers))
 
     @staticmethod
     def __calculate_number_of_hashing_functions(target_false_positive_prob):
@@ -210,12 +208,11 @@ class CuckooFilter(ShrinkableFilter):
                  seeds=DEFAULT_SEEDS) -> None:
         super().__init__()
         assert len(seeds) >= 2
-        self.__logger = logging.getLogger(CuckooFilter.__name__)
         self.__fingerprint_size = fingerprint_size if fingerprint_size else \
             self.__calculate_fingerprint_size(expected_item_count, target_false_positive_prob, items_per_bucket)
         self.__max_items_per_bucket = items_per_bucket
         self.__bucket_size = self.__max_items_per_bucket * self.__fingerprint_size
-        self.__number_of_buckets = math.floor(target_total_size / self.__bucket_size)
+        self.__number_of_buckets = self.__calculate_number_of_buckets(expected_item_count, target_total_size)
         self.__bucket_size = self.__max_items_per_bucket * self.__fingerprint_size
         self.__total_size = self.__number_of_buckets * self.__bucket_size
         self.__max_item_relocations = max_item_relocations
@@ -231,11 +228,10 @@ class CuckooFilter(ShrinkableFilter):
         self.__current_items_per_bucket = [0] * self.__number_of_buckets
         # we want to extract N bits of fingerprint so we need an AND mask of the form: '1' * N <=> bin(2^N - 1)
         self.__fingerprint_mask = (1 << self.__fingerprint_size) - 1
-        self.__logger.info("Initialized Cuckoo Filter with %s-bit array, target false positive prob. %s, "
-                           "fingerprint size %s, max items per bucket %s, number of buckets %s "
-                           "and max item relocations %s", self.__total_size, target_false_positive_prob,
-                           self.__fingerprint_size, self.__max_items_per_bucket, self.__number_of_buckets,
-                           self.__max_item_relocations)
+        print("Initialized Cuckoo Filter with %s-bit array, target false positive prob. %s, fingerprint size %s, "
+              "max items per bucket %s, number of buckets %s and max item relocations %s" % (
+            self.__total_size, target_false_positive_prob, self.__fingerprint_size, self.__max_items_per_bucket,
+            self.__number_of_buckets, self.__max_item_relocations))
 
     @classmethod
     def __calculate_fingerprint_size(cls, expected_item_count, target_false_positive_prob, items_per_bucket):
@@ -254,6 +250,12 @@ class CuckooFilter(ShrinkableFilter):
     @classmethod
     def __fingerprint_lower_bound_for_target_false_positive_prob(cls, target_false_positive_prob, items_per_bucket):
         return math.log2(items_per_bucket / target_false_positive_prob)
+
+    def __calculate_number_of_buckets(self, expected_item_count, target_total_size):
+        return max(
+            math.floor(target_total_size / self.__bucket_size),
+            math.ceil(expected_item_count / self.__max_items_per_bucket)
+        )
 
     def __contains__(self, item: object) -> bool:
         serialized_item = self.__serializer(item)
@@ -286,8 +288,6 @@ class CuckooFilter(ShrinkableFilter):
         serialized_item = self.__serializer(item)
         fingerprint = self.__fingerprint(serialized_item)
         locations = self.__get_locations(serialized_item, fingerprint)
-        if self.__is_fingerprint_present(fingerprint, locations):
-            return
 
         available_locations = [location for location in locations if self.__is_bucket_available(location)]
         if len(available_locations) > 0:
