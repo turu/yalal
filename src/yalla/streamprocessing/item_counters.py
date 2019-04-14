@@ -108,7 +108,7 @@ class HyperLogLog(ItemCounter):
 
         (3) When the HLL is not yet saturated with items (some buckets were not used yet; activation threshold was not
         reached), using (1) and (2) could strongly over-estimate the cardinality of the input set (not enough data
-        for the beauty averages at scale to kick in). In that case, an arguably better estimate is simply the number
+        for the beauty of averages at scale to kick in). In that case, an arguably better estimate is simply the number
         of activated buckets. It is so because incoming items are distributed approx. randomly over the buckets.
         Therefore, on average, we would expect n unique, random (hashes of) items to activate the majority of n buckets.
         """
@@ -150,7 +150,7 @@ class HyperLogLog(ItemCounter):
         return leading_zeros
 
     def merge_with(self, other_counter: HyperLogLog) -> None:
-        assert self.__number_of_activated_buckets == other_counter.__number_of_activated_buckets
+        assert self.__number_of_buckets == other_counter.__number_of_buckets
         assert self.__bucket_prefix_length == other_counter.__bucket_prefix_length
         self.__buckets = np.maximum(self.__buckets, other_counter.__buckets)
         self.__bucket_activations |= other_counter.__bucket_activations
