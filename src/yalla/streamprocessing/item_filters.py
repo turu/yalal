@@ -221,6 +221,7 @@ class CuckooFilter(ShrinkableFilter):
         self.__fingerprinting_hasher = XxHasher32(seeds[0])
         self.__hasher = XxHasher64(seeds[1])
 
+        # store buckets in a continuous strip of memory
         self.__bit_array = bitarray(self.__total_size, endian='little')
         # WARN: since this is a reference/educational implementation, we are ok with cheating slightly and keeping
         # bucket-item counts in a separate list. In a more refined implementation these counts should be encoded
@@ -245,17 +246,44 @@ class CuckooFilter(ShrinkableFilter):
 
     @classmethod
     def __fingerprint_lower_bound_for_expected_item_count(cls, expected_item_count, items_per_bucket):
+        """
+        Fingerprint size (f) must be at least Omega(log n/b). Otherwise the probability of insertion failure grows
+        rapidly, where:
+          * n - expected_item_count
+          * b - items_per_bucket
+        """
         return math.log(expected_item_count / items_per_bucket)
 
     @classmethod
     def __fingerprint_lower_bound_for_target_false_positive_prob(cls, target_false_positive_prob, items_per_bucket):
+        """
+        Fingerprint size (f) must be at least ceil(log2 2*b/e) to allow for the target false positive probability (e),
+        where:
+          * b - items_per_bucket
+        """
         return math.log2(items_per_bucket / target_false_positive_prob)
 
     def __calculate_number_of_buckets(self, expected_item_count, target_total_size):
+        """
+        Calculate how many buckets we have available considering the target total size of the filter and make sure that
+        we actually have enough space to store all expected items. Note that the final size of the filter may therefore
+        be bigger than requested
+        """
         return max(
             math.floor(target_total_size / self.__bucket_size),
             math.ceil(expected_item_count / self.__max_items_per_bucket)
         )
+
+    @staticmethod
+    def __bit_array_to_int(bit_array: bitarray) -> int:
+        integer = 0
+        for bit in bit_array:
+            integer = (integer << 1) | bit
+        return integer
+
+    @staticmethod
+    def __int_to_bit_array(integer: int, bit_size: int) -> bitarray:
+        return bitarray(format(integer, '0%sb' % bit_size), endian='little')
 
     def __contains__(self, item: object) -> bool:
         serialized_item = self.__serializer(item)
@@ -263,42 +291,50 @@ class CuckooFilter(ShrinkableFilter):
         locations = self.__get_locations(serialized_item, fingerprint)
         return self.__is_fingerprint_present(fingerprint, locations)
 
-    def __is_fingerprint_present(self, fingerprint, locations):
+    def __is_fingerprint_present(self, fingerprint: bitarray, locations):
         return any([self.__get_item_id_in_bucket(location, fingerprint) >= 0 for location in locations])
 
-    def __get_item_id_in_bucket(self, bucket_id, fingerprint):
+    def __get_item_id_in_bucket(self, bucket_id: int, fingerprint: bitarray):
         for item_id in range(self.__current_items_per_bucket[bucket_id]):
             item = self.__get_item(bucket_id, item_id)
             if item == fingerprint:
                 return item_id
         return -1
 
-    def __get_locations(self, serialized_item, fingerprint):
+    def __get_locations(self, serialized_item: bytes, fingerprint: bitarray):
+        """
+        Applies a partial-key hashing scheme, which applies a clever, reversible transformation to the first computed
+        location. l2 = l1 xor fingerprint -> l1 = l2 xor fingerprint. Therefore we can calculate alternative locations
+        of cuckoo items even when storing only short fingerprints
+        """
         location1 = self.__hasher.hash(serialized_item) % self.__number_of_buckets
-        hashed_fingerprint = self.__hasher.hash(fingerprint.to_bytes(self.__fingerprint_size, byteorder='little'))
+        hashed_fingerprint = self.__hasher.hash(fingerprint.tobytes())
         location2 = (location1 ^ hashed_fingerprint) % self.__number_of_buckets
         return [location1, location2]
 
-    def __fingerprint(self, serialized_item):
+    def __fingerprint(self, serialized_item: bytes) -> bitarray:
         raw_fingerprint = self.__fingerprinting_hasher.hash(serialized_item)
-        fingerprint_bits = raw_fingerprint & self.__fingerprint_mask
-        return fingerprint_bits
+        fingerprint = raw_fingerprint & self.__fingerprint_mask
+        return self.__int_to_bit_array(fingerprint, self.__fingerprint_size)
 
     def add(self, item: object):
         serialized_item = self.__serializer(item)
         fingerprint = self.__fingerprint(serialized_item)
         locations = self.__get_locations(serialized_item, fingerprint)
 
+        # simply insert the item if any of the locations have room
         available_locations = [location for location in locations if self.__is_bucket_available(location)]
         if len(available_locations) > 0:
             self.__append_item_to_bucket(locations[0], fingerprint)
             return
 
+        # otherwise try to 'defragment' the cuckoo table by kicking random items to their alternative locations until
+        # we find an item, whose alternative location is available, or we fail miserably and drown in tears
         current_location = random.choice(locations)
         item_relocations = 0
         while item_relocations < self.__max_item_relocations:
             fingerprint = self.__swap_with_random_item_from_bucket(current_location, fingerprint)
-            hashed_fingerprint = self.__hasher.hash(fingerprint.to_bytes(self.__fingerprint_size, byteorder='little'))
+            hashed_fingerprint = self.__hasher.hash(fingerprint.tobytes())
             current_location = (current_location ^ hashed_fingerprint) % self.__number_of_buckets
             if self.__is_bucket_available(current_location):
                 self.__append_item_to_bucket(current_location, fingerprint)
@@ -306,7 +342,7 @@ class CuckooFilter(ShrinkableFilter):
             item_relocations += 1
         raise CuckooInsertionFailure("CuckooFilter is full. Increase max_item_relocations or target_total_size")
 
-    def __swap_with_random_item_from_bucket(self, bucket_id, fingerprint):
+    def __swap_with_random_item_from_bucket(self, bucket_id: int, fingerprint: bitarray) -> bitarray:
         id_to_swap = random.randrange(0, self.__current_items_per_bucket[bucket_id])
         item_to_swap = self.__get_item(bucket_id, id_to_swap)
         self.__set_item(bucket_id, id_to_swap, fingerprint)
@@ -315,27 +351,19 @@ class CuckooFilter(ShrinkableFilter):
     def __is_bucket_available(self, bucket_id):
         return self.__current_items_per_bucket[bucket_id] < self.__max_items_per_bucket
 
-    def __append_item_to_bucket(self, bucket_id, fingerprint):
+    def __append_item_to_bucket(self, bucket_id: int, fingerprint: bitarray):
         self.__set_item(bucket_id, self.__current_items_per_bucket[bucket_id], fingerprint)
         self.__current_items_per_bucket[bucket_id] += 1
 
-    def __get_item(self, bucket_id, item_id):
+    def __get_item(self, bucket_id: int, item_id: int) -> bitarray:
         item_start, item_end = self.__item_bit_coordinates(bucket_id, item_id)
-        return self.__bit_array_to_int(self.__bit_array[item_start:item_end])
+        return self.__bit_array[item_start:item_end]
 
-    @staticmethod
-    def __bit_array_to_int(bit_array):
-        integer = 0
-        for bit in bit_array:
-            integer = (integer << 1) | bit
-        return integer
-
-    def __set_item(self, bucket_id, item_id, fingerprint):
+    def __set_item(self, bucket_id: int, item_id: int, fingerprint: bitarray):
         item_start, item_end = self.__item_bit_coordinates(bucket_id, item_id)
-        fingerprint_bits = format(fingerprint, '0%sb' % self.__fingerprint_size)
-        self.__bit_array[item_start:item_end] = bitarray(fingerprint_bits, endian='little')
+        self.__bit_array[item_start:item_end] = fingerprint
 
-    def __item_bit_coordinates(self, bucket_id, item_id):
+    def __item_bit_coordinates(self, bucket_id: int, item_id: int):
         item_start = bucket_id * self.__bucket_size + item_id * self.__fingerprint_size
         item_end = item_start + self.__fingerprint_size
         return item_start, item_end

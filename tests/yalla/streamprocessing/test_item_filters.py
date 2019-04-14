@@ -39,6 +39,7 @@ class TestBloomFilter:
         naive_filter = NaiveFilter(bloom_filter.get_bit_array_size())
 
         # when
+        # NOTE that when doing proper comparison we should repeat this procedure many times
         observed_false_positive_fraction, total_items_tested, bloom_time = \
             sample_real_false_positive_rate(bloom_filter, expected_item_count, target_false_positive_prob)
         naive_false_positive_fraction, total_items_tested, naive_time = \
@@ -87,20 +88,21 @@ class TestCuckooFilter:
         with pytest.raises(NotImplementedError):
             cuckoo_filter.merge_with(other_filter)
 
-    def test_should_achieve_similar_accuracy_to_bloom_filter_at_similar_space_requirements(self):
+    def test_should_achieve_comparable_accuracy_to_bloom_filter_at_similar_space_requirements(self):
         # given
         expected_item_count = 1000000
         target_false_positive_prob = 0.01
-        tolerance = 1.5
+        tolerance = 2
         bloom_filter = BloomFilter(expected_item_count=expected_item_count,
                                    target_false_positive_prob=target_false_positive_prob)
-        # Cuckoo Filter is much harder to tune; 9 is an empirically determined value of fingerprint_size
+        # Cuckoo Filter is much harder to tune; 10 is an empirically determined value of fingerprint_size
         cuckoo_filter = CuckooFilter(expected_item_count=expected_item_count,
                                      target_total_size=bloom_filter.get_bit_array_size(),
                                      target_false_positive_prob=target_false_positive_prob,
-                                     fingerprint_size=9)
+                                     fingerprint_size=10)
 
         # when
+        # NOTE that when doing proper comparison we should repeat this procedure many times
         observed_false_positive_fraction, total_items_tested, cuckoo_time = \
             sample_real_false_positive_rate(cuckoo_filter, expected_item_count, target_false_positive_prob)
         bloom_false_positive_fraction, total_items_tested, bloom_time = \
