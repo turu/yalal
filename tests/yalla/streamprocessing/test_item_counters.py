@@ -1,6 +1,6 @@
 import pytest
 
-from yalla.streamprocessing.item_counters import KeepAllCounter, sample_real_error
+from yalla.streamprocessing.item_counters import KeepAllCounter, sample_real_error, HyperLogLog
 
 
 class TestKeepAllCounter:
@@ -41,5 +41,34 @@ class TestKeepAllCounter:
 
         # then
         print("Measured error was %s. Counted %s out of expected %s" % (error, observed_count, expected_item_count))
+        print("Test completed in %s sec" % time_elapsed)
         assert observed_count == expected_item_count
         assert error < tolerance
+
+
+class TestHyperLogLog:
+    def test_should_add_new_item_to_small_hll(self):
+        # given
+        counter = HyperLogLog()
+
+        # when
+        counter.add("test_item")
+        counter.add("test_item")
+
+        # then
+        assert counter.unique_count() == 1
+
+    def test_should_merge_two_small_hlls(self):
+        # given
+        lhs = HyperLogLog()
+        rhs = HyperLogLog()
+        lhs.add("left_item")
+        rhs.add("right_item")
+        lhs.add("common_item")
+        rhs.add("common_item")
+
+        # when
+        lhs.merge_with(rhs)
+
+        # then
+        assert lhs.unique_count() == 3
