@@ -1,14 +1,14 @@
 Table of Contents
 =================
 
-   * [YALLA](#yalla)
+   * [About YALLA](#about-yalla-v010)
    * [What's the point](#whats-the-point)
    * [What's inside](#whats-inside)
       * [Stream processing](#stream-processing)
          * [Item filters](#item-filters)
    * [Should I use these implementations in production](#should-i-use-these-implementations-in-production)
 
-# About YALLA
+# About YALLA v0.1.0
 _**Y**et **A**nother **L**ame **L**ibrary of **A**lgorithms_* 
 is an ever growing collection of algorithms and data structures 
 used in **machine learning** and large scale **data processing**, 
@@ -44,6 +44,7 @@ Currently the following topics are covered:
 ## Stream processing
 ### Item filters
 1. Bloom Filter
+2. Cuckoo Filter
 
 # Should I use these implementations in production
 ![N|Solid](https://i.kym-cdn.com/entries/icons/mobile/000/005/180/YaoMingMeme.jpg)
@@ -53,4 +54,5 @@ Currently the following topics are covered:
 The source code of algorithms and data structures in this repository 
 is likely inefficient and suboptimal. It is intentionally as pure 
 and pseudo-code-like as possible. It may also contain various bugs 
-and ignore corner-cases. The purpose of this library is purely educational.  
+and ignore corner-cases. The purpose of this library is purely to serve
+as a repository of reference implementations, to aid and maintain understanding.  

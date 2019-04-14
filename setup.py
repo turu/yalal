@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='yalla',
-    version='0.0.1',
+    version='0.1.0',
     packages=find_packages('src', exclude=['docs', 'tests']),
     package_dir={'': 'src'},
     url='',
