@@ -116,33 +116,35 @@ class HyperLogLog(ItemCounter):
         (1) At scale (once the HLL is reasonably saturated), each of (b) buckets holds approximately 1/b of input items.
         Each bucket in isolation, estimates cardinality of a random sample of 1/b of input items.
 
-        (2) Cardinality of each bucket sample (i) is estimated to be equal to 2^z_i, where z_i is the longest run of
+        (2) Cardinality of each bucket sample (i) is estimated to be equal to 2^(z_i+1), where z_i is the longest run of
         leading zeros (excluding the bucket-selecting p-bit prefix; note that b = 2^p) of any item belonging to bucket i
 
         To calculate cardinality of the whole input set, we take an average of per-bucket estimates from (2) and
         scale it to the whole input set by multiplying it by the number of buckets. This is acceptable thanks to (1).
 
         Harmonic mean is used, because it's very good at smoothing drastic outliers. This helps avoid producing a
-        grossly overinflated final estimate.
+        grossly overinflated final estimate. Finally, a bias correction factor is applied to take into account hash
+        collisions.
 
         (3) When the HLL is not yet saturated with items (some buckets were not used yet; activation threshold was not
         reached), using (1) and (2) could strongly over-estimate the cardinality of the input set (not enough data
         for the beauty of averages at scale to kick in). In that case, an arguably better estimate is to apply Linear
-        Counting algorithm, which approximates the number of unique items based on the fraction of activated buckets.
+        Counting algorithm, which approximates the number of unique items based on the fraction of empty buckets.
         The estimate distinct count is equal to -b * log e_n, where e_n denotes the fraction of empty buckets
         """
-        raw_estimate = self.__bias_correction_factor * self.__number_of_buckets * self.__harmonic_mean_of_bucket_estimates()
+        raw_estimate = self.__bias_correction_factor * float(self.__number_of_buckets) \
+            * self.__harmonic_mean_of_bucket_estimates()
         if raw_estimate > self.__small_range_correction_threshold:
             return raw_estimate
-        return self.__small_range_liner_counting_estimate(raw_estimate)
+        return self.__small_range_linear_counting_estimate(raw_estimate)
 
     def __harmonic_mean_of_bucket_estimates(self):
         """
-        Calculate harmonic mean of bucket estimates of the form 2^z_i following the usual formula for harmonic mean.
+        Calculate harmonic mean of bucket estimates of the form 2^(z_i+1) following the usual formula for harmonic mean.
         """
-        return self.__number_of_activated_buckets / np.sum(1 / (2 ** self.__buckets))
+        return float(self.__number_of_activated_buckets) / np.sum(2. ** -self.__buckets)
 
-    def __small_range_liner_counting_estimate(self, raw_estimate):
+    def __small_range_linear_counting_estimate(self, raw_estimate):
         deactivated_buckets = self.__number_of_buckets - self.__number_of_activated_buckets
         if deactivated_buckets == 0:
             # we cannot use Linear Counting approximation since all buckets are already used (occupancy factor == 1)
@@ -163,8 +165,8 @@ class HyperLogLog(ItemCounter):
         # strip bucket prefix from the hash - it's not needed anymore
         hash_without_bucket_prefix = hashed_item >> self.__bucket_prefix_length
         leading_zeros = self.__calculate_number_of_leading_zeros(hash_without_bucket_prefix)
-        # update max number of leading zeros in bucket
-        self.__buckets[bucket_id] = max(self.__buckets[bucket_id], leading_zeros)
+        # update max number of leading zeros plus one in the bucket
+        self.__buckets[bucket_id] = max(self.__buckets[bucket_id], leading_zeros + 1)
 
     def __calculate_number_of_leading_zeros(self, integer: int) -> int:
         if integer == 0:
