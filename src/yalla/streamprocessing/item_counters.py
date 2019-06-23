@@ -54,14 +54,16 @@ class KeepAllCounter(ItemCounter):
 
 
 class HyperLogLog(ItemCounter):
+    """
+    Implementation of HyperLogLog algorithm described in https://storage.googleapis.com/pub-tools-public-publication-data/pdf/40671.pdf
+    Utilizes Linear Counting for small range correction, as described in http://dblab.kaist.ac.kr/Prof/pdf/ACM90_TODS_v15n2.pdf
+    """
     DEFAULT_SEED = 2 ** 64 - 59
     DEFAULT_NUMBER_OF_BUCKETS = 1024
-    DEFAULT_SMALL_RANGE_BUCKET_ACTIVATION_THRESHOLD = 1.0
     HASH_BIT_SIZE = 64
 
     def __init__(self,
                  requested_number_of_buckets=DEFAULT_NUMBER_OF_BUCKETS,
-                 small_range_bucket_activation_threshold=DEFAULT_SMALL_RANGE_BUCKET_ACTIVATION_THRESHOLD,
                  serializer=None,
                  seed=DEFAULT_SEED) -> None:
         super().__init__()
@@ -84,13 +86,30 @@ class HyperLogLog(ItemCounter):
         self.__bucket_activations = bitarray(self.__number_of_buckets)
         self.__bucket_activations.setall(False)
         self.__number_of_activated_buckets = 0
-        self.__small_range_bucket_activation_threshold = small_range_bucket_activation_threshold
+        # 2.5 factor is the recommended Linear Counting load factor as per Flajolet et al
+        self.__small_range_correction_threshold = 2.5 * self.__number_of_buckets
+        self.__bias_correction_factor = self.__calculate_bias_correction_factor(self.__number_of_buckets)
         print("Initialized HyperLogLog with %s buckets and %s bits of storage" %
               (self.__number_of_buckets, self.get_size_in_bits()))
 
     @staticmethod
     def __calculate_nearest_power_of_two(requested_number_of_buckets):
         return math.ceil(requested_number_of_buckets / 2) * 2
+
+    @staticmethod
+    def __calculate_bias_correction_factor(number_of_buckets):
+        """
+        Calculate a factor to correct bias caused by hash collisions, introduced as per empirically obtained values
+        from the paper
+        """
+        if number_of_buckets <= 16:
+            return 0.673
+        elif number_of_buckets <= 32:
+            return 0.697
+        elif number_of_buckets <= 64:
+            return 0.709
+        else:
+            return 0.7213 / (1 + 1.079/number_of_buckets)
 
     def unique_count(self) -> int:
         """
@@ -108,21 +127,28 @@ class HyperLogLog(ItemCounter):
 
         (3) When the HLL is not yet saturated with items (some buckets were not used yet; activation threshold was not
         reached), using (1) and (2) could strongly over-estimate the cardinality of the input set (not enough data
-        for the beauty of averages at scale to kick in). In that case, an arguably better estimate is simply the number
-        of activated buckets. It is so because incoming items are distributed approx. randomly over the buckets.
-        Therefore, on average, we would expect n unique, random (hashes of) items to activate the majority of n buckets.
+        for the beauty of averages at scale to kick in). In that case, an arguably better estimate is to apply Linear
+        Counting algorithm, which approximates the number of unique items based on the fraction of activated buckets.
+        The estimate distinct count is equal to -b * log e_n, where e_n denotes the fraction of empty buckets
         """
-        fraction_of_activated_buckets = self.__number_of_activated_buckets / self.__number_of_buckets
-        if fraction_of_activated_buckets >= self.__small_range_bucket_activation_threshold:
-            return self.__number_of_buckets * self.__harmonic_mean_of_bucket_estimates()
-        else:
-            return self.__number_of_activated_buckets
+        raw_estimate = self.__bias_correction_factor * self.__number_of_buckets * self.__harmonic_mean_of_bucket_estimates()
+        if raw_estimate > self.__small_range_correction_threshold:
+            return raw_estimate
+        return self.__small_range_liner_counting_estimate(raw_estimate)
 
     def __harmonic_mean_of_bucket_estimates(self):
         """
         Calculate harmonic mean of bucket estimates of the form 2^z_i following the usual formula for harmonic mean.
         """
         return self.__number_of_activated_buckets / np.sum(1 / (2 ** self.__buckets))
+
+    def __small_range_liner_counting_estimate(self, raw_estimate):
+        deactivated_buckets = self.__number_of_buckets - self.__number_of_activated_buckets
+        if deactivated_buckets == 0:
+            # we cannot use Linear Counting approximation since all buckets are already used (occupancy factor == 1)
+            return raw_estimate
+        fraction_of_deactivated_buckets = deactivated_buckets / self.__number_of_buckets
+        return -self.__number_of_buckets * math.log(fraction_of_deactivated_buckets)
 
     def add(self, item: object):
         # hash the item and calculate target bucket id
