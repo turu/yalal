@@ -1,14 +1,14 @@
 Table of Contents
 =================
 
-   * [About YALLA](#about-yalla-v020)
+   * [About YALLA](#about-yalla-v030)
    * [What's the point](#whats-the-point)
    * [What's inside](#whats-inside)
       * [Stream processing](#stream-processing)
          * [Item filters](#item-filters)
    * [Should I use these implementations in production](#should-i-use-these-implementations-in-production)
 
-# About YALLA v0.2.0
+# About YALLA v0.3.0
 _**Y**et **A**nother **L**ame **L**ibrary of **A**lgorithms_* 
 is an ever growing collection of algorithms and data structures 
 used in **machine learning** and large scale **data processing**, 
@@ -43,10 +43,15 @@ aligned with their real life domains and applications. Each comes with:
 Currently the following topics are covered:
 ## Stream processing
 ### Item filters
+Algorithms to test for item uniqueness ("have I seen this item before?") in an infinite stream of data:
 1. Bloom Filter
 2. Cuckoo Filter
 ### Item counters
+Algorithms to count the number of distinct, unique elements in an infinite stream of data:
 1. HyperLogLog
+### Stream moments
+Algorithms to compute mean, variance & standard deviation, skewness and kurtosis of infinite streams of data:
+1. Welford-Knuth-Pebay one-pass, parallel, statistical moments
 
 # Should I use these implementations in production
 ![N|Solid](https://i.kym-cdn.com/entries/icons/mobile/000/005/180/YaoMingMeme.jpg)
