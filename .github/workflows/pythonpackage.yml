@@ -11,16 +11,18 @@ jobs:
         os: [macOS-latest]
     steps:
     - uses: actions/checkout@v1
-    - name: Setup Conda
+    - name: Setup conda
       uses: s-weigand/setup-conda@v1.0.2
       with:
         update-conda: true
         activate-conda: false
         conda-channels: anaconda, conda-forge
-    - name: Install dependencies
+    - name: Create conda env
       run: |
         conda env create -f environment.yml
-        conda init bash
+        #conda init bash
+    - name: Activate conda env & install pip dependencies
+      run: |
         conda activate yalla
         python -m pip install --upgrade pip
         pip install -r requirements.txt
