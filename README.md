@@ -1,3 +1,5 @@
+![](https://github.com/actions/yalal/workflows/Continuous%20Integration/badge.svg)
+
 Table of Contents
 =================
 
