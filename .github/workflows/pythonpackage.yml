@@ -6,22 +6,20 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        os: [macOS-latest]
+        os: [macOS-latest, ubuntu-latest]
     steps:
     - uses: actions/checkout@v1
     - name: Setup conda
       uses: s-weigand/setup-conda@v1.0.2
       with:
         update-conda: true
-        #activate-conda: false
         conda-channels: anaconda, conda-forge
-    - name: Create conda env
+    - name: Create & activate conda env
       run: |
         conda env create -f environment.yml
-        #conda init bash
-    - name: Activate conda env & install pip dependencies
+        source activate yalla
+    - name: Install pip dependencies
       run: |
-        source activate yalal
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Lint with flake8
