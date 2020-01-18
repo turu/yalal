@@ -21,7 +21,7 @@ jobs:
         #conda init bash
     - name: Activate conda env & install pip dependencies
       run: |
-        conda activate yalla
+        source activate yalla
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Lint with flake8
