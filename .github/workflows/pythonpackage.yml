@@ -22,8 +22,8 @@ jobs:
         python setup.py install
     - name: Run tests
       run: |
-        pip install pytest==4.3.1
-        python -m pytest
+        source activate yalla
+        python -m pytest tests/
     - name: Lint with flake8
       run: |
         pip install flake8
