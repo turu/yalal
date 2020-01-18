@@ -19,6 +19,7 @@ jobs:
         source recreate_environment.sh
     - name: Build & install
       run: |
+        source activate yalla
         python setup.py install
     - name: Run tests
       run: |
