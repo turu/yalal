@@ -33,7 +33,7 @@ class TestBloomFilter:
         # given
         expected_item_count = 1000000
         target_false_positive_prob = 0.01
-        tolerance = 1.25
+        tolerance = 1.5
         bloom_filter = BloomFilter(expected_item_count=expected_item_count,
                                    target_false_positive_prob=target_false_positive_prob)
         naive_filter = NaiveFilter(bloom_filter.get_bit_array_size())
