@@ -60,5 +60,5 @@ simplicity. The primary purpose of this library is to serve as a repository of r
 maintain understanding.  
 
 # How to build & test
-1. (Re)create environment: ```./recreate_environment.sh```
+1. (Re)create environment: ```source recreate_environment.sh```
 2. Build, install & test: ```python setup.py install test```
