@@ -7,6 +7,7 @@ Table of Contents
       * [Stream processing](#stream-processing)
          * [Item filters](#item-filters)
    * [Should I use these implementations in production](#should-i-use-these-implementations-in-production)
+   * [How to build & test](#how-to-build--test)
 
 # About YALLA v0.2.0
 _**Y**et **A**nother **L**ame **L**ibrary of **A**lgorithms_* 
@@ -57,3 +58,7 @@ The source code of algorithms and data structures in this repository is not opti
 It is intentionally as pure and pseudo-code-like as possible. It may also ignore certain corner-cases for the sake of
 simplicity. The primary purpose of this library is to serve as a repository of reference implementations, to aid and 
 maintain understanding.  
+
+# How to build & test
+1. (Re)create environment: ```./recreate_environment.sh```
+2. Build, install & test: ```python setup.py install test```
