@@ -8,8 +8,8 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        python-version: [3.7]
+        os: [macOS-latest]
+        #os: [ubuntu-latest, windows-latest, macOS-latest]
     steps:
     - uses: actions/checkout@v1
     - name: Setup Conda
@@ -17,7 +17,6 @@ jobs:
       with:
         update-conda: true
         activate-conda: false
-        python-version: ${{ matrix.python-version }}
         conda-channels: anaconda, conda-forge
     - name: Install dependencies
       run: |
