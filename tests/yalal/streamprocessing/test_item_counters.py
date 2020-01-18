@@ -1,6 +1,6 @@
 import pytest
 import math
-from yalla.streamprocessing.item_counters import KeepAllCounter, sample_real_error, HyperLogLog
+from yalal.streamprocessing.item_counters import KeepAllCounter, sample_real_error, HyperLogLog
 
 
 class TestKeepAllCounter:

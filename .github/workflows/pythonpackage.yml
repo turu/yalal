@@ -19,11 +19,11 @@ jobs:
         source recreate_environment.sh
     - name: Build & install
       run: |
-        source activate yalla
+        source activate yalal
         python setup.py install
     - name: Run tests
       run: |
-        source activate yalla
+        source activate yalal
         python -m pytest tests/
     - name: Lint with flake8
       run: |
