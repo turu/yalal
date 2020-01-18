@@ -7,7 +7,7 @@ import timeit
 
 from bitarray import bitarray
 
-from yalla.hashing.hashers import XxHasher64, XxHasher32
+from yalal.hashing.hashers import XxHasher64, XxHasher32
 
 
 class ItemFilter(metaclass=abc.ABCMeta):

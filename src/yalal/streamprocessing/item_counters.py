@@ -7,7 +7,7 @@ import timeit
 import numpy as np
 from bitarray import bitarray
 
-from yalla.hashing.hashers import XxHasher64
+from yalal.hashing.hashers import XxHasher64
 
 
 class ItemCounter(metaclass=abc.ABCMeta):

@@ -1,5 +1,5 @@
 import pytest
-from yalla.streamprocessing.item_filters import BloomFilter, sample_real_false_positive_rate, NaiveFilter, CuckooFilter
+from yalal.streamprocessing.item_filters import BloomFilter, sample_real_false_positive_rate, NaiveFilter, CuckooFilter
 
 
 class TestBloomFilter:
