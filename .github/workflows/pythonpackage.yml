@@ -15,11 +15,12 @@ jobs:
       uses: s-weigand/setup-conda@v1.0.2
       with:
         update-conda: true
-        #activate-conda: false
+        activate-conda: false
         conda-channels: anaconda, conda-forge
     - name: Install dependencies
       run: |
         conda env create -f environment.yml
+        conda init bash
         conda activate yalla
         python -m pip install --upgrade pip
         pip install -r requirements.txt
